@@ -16,6 +16,9 @@ const els = {
   messageInput: document.querySelector("#messageInput"),
   sendButton: document.querySelector("#sendButton"),
   stopButton: document.querySelector("#stopButton"),
+  voiceInputButton: document.querySelector("#voiceInputButton"),
+  voiceOutputButton: document.querySelector("#voiceOutputButton"),
+  voiceStatus: document.querySelector("#voiceStatus"),
 };
 
 let worker = null;
@@ -23,6 +26,14 @@ let modelReady = false;
 let generating = false;
 let messages = [];
 let currentAssistantText = "";
+
+let voiceOutputEnabled = true;
+let recognition = null;
+let isListening = false;
+let speechSupported = "speechSynthesis" in window;
+let recognitionSupported =
+  "SpeechRecognition" in window ||
+  "webkitSpeechRecognition" in window;
 
 function setStatus(text, kind = "idle") {
   els.statusBadge.textContent = text;
@@ -84,6 +95,163 @@ function setGeneratingUI(active) {
   els.sendButton.classList.toggle("hidden", active);
   els.sendButton.disabled = active || !modelReady;
   els.messageInput.disabled = active || !modelReady;
+}
+
+
+function setVoiceStatus(text) {
+  if (els.voiceStatus) {
+    els.voiceStatus.textContent = text || "";
+  }
+}
+
+function speakText(text) {
+  if (!voiceOutputEnabled || !speechSupported || !text?.trim()) {
+    return;
+  }
+
+  try {
+    window.speechSynthesis.cancel();
+
+    const utterance =
+      new SpeechSynthesisUtterance(text.trim());
+
+    utterance.rate = 0.96;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+
+    utterance.onstart = () => {
+      setVoiceStatus("K.E.V.I.N is speaking…");
+    };
+
+    utterance.onend = () => {
+      setVoiceStatus("");
+    };
+
+    utterance.onerror = () => {
+      setVoiceStatus("Voice output could not be played.");
+    };
+
+    window.speechSynthesis.speak(utterance);
+  } catch {
+    setVoiceStatus("Voice output is unavailable in this browser.");
+  }
+}
+
+function setupVoiceInput() {
+  if (!recognitionSupported) {
+    els.voiceInputButton.textContent = "🎙️ Voice unavailable";
+    els.voiceInputButton.disabled = true;
+    return;
+  }
+
+  const Recognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
+
+  recognition = new Recognition();
+
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = navigator.language || "en-US";
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    isListening = true;
+    els.voiceInputButton.classList.add("active");
+    els.voiceInputButton.textContent = "⏹ Stop voice";
+    setVoiceStatus("Listening… speak to K.E.V.I.N.");
+  };
+
+  recognition.onresult = (event) => {
+    let transcript = "";
+
+    for (
+      let i = event.resultIndex;
+      i < event.results.length;
+      i++
+    ) {
+      transcript +=
+        event.results[i][0].transcript;
+    }
+
+    els.messageInput.value =
+      transcript.trim();
+
+    autoResize();
+  };
+
+  recognition.onerror = (event) => {
+    isListening = false;
+    els.voiceInputButton.classList.remove("active");
+    els.voiceInputButton.textContent = "🎙️ Voice";
+
+    const message =
+      event.error === "not-allowed"
+        ? "Microphone permission was denied."
+        : `Voice input error: ${event.error}`;
+
+    setVoiceStatus(message);
+  };
+
+  recognition.onend = () => {
+    isListening = false;
+    els.voiceInputButton.classList.remove("active");
+    els.voiceInputButton.textContent = "🎙️ Voice";
+
+    if (
+      els.messageInput.value.trim() &&
+      modelReady &&
+      !generating
+    ) {
+      setVoiceStatus("Voice captured. Press Send or Enter.");
+    }
+  };
+}
+
+function toggleVoiceInput() {
+  if (!recognition) {
+    return;
+  }
+
+  if (isListening) {
+    recognition.stop();
+    return;
+  }
+
+  if (generating) {
+    return;
+  }
+
+  try {
+    recognition.lang =
+      navigator.language || "en-US";
+
+    recognition.start();
+  } catch {
+    setVoiceStatus(
+      "Could not start voice input. Try again."
+    );
+  }
+}
+
+function toggleVoiceOutput() {
+  voiceOutputEnabled =
+    !voiceOutputEnabled;
+
+  els.voiceOutputButton.setAttribute(
+    "aria-pressed",
+    String(voiceOutputEnabled)
+  );
+
+  els.voiceOutputButton.textContent =
+    voiceOutputEnabled
+      ? "🔊 Voice On"
+      : "🔇 Voice Off";
+
+  if (!voiceOutputEnabled && speechSupported) {
+    window.speechSynthesis.cancel();
+    setVoiceStatus("");
+  }
 }
 
 function makeWorker() {
