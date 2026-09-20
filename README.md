@@ -187,3 +187,14 @@ Voice output can be disabled at any time.
 ### Privacy note
 
 Voice input availability and processing behavior can vary by browser implementation. This application does not add a speech API server of its own. Review the browser's microphone permissions and speech-recognition behavior for the browser/device you use.
+
+
+
+## Version notes
+
+- Voice input removed.
+- Voice output removed.
+- ElevenLabs integration removed.
+- Added a K.E.V.I.N favicon.
+- Chat inference remains browser-side with Transformers.js.
+- The Stop button terminates the active inference worker and restarts it using cached model assets when possible.

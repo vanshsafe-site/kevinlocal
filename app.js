@@ -16,9 +16,6 @@ const els = {
   messageInput: document.querySelector("#messageInput"),
   sendButton: document.querySelector("#sendButton"),
   stopButton: document.querySelector("#stopButton"),
-  voiceInputButton: document.querySelector("#voiceInputButton"),
-  voiceOutputButton: document.querySelector("#voiceOutputButton"),
-  voiceStatus: document.querySelector("#voiceStatus"),
 };
 
 let worker = null;
@@ -26,14 +23,8 @@ let modelReady = false;
 let generating = false;
 let messages = [];
 let currentAssistantText = "";
-
-let voiceOutputEnabled = true;
-let recognition = null;
-let isListening = false;
-let speechSupported = "speechSynthesis" in window;
-let recognitionSupported =
-  "SpeechRecognition" in window ||
-  "webkitSpeechRecognition" in window;
+let currentAssistantBody = null;
+let selectedDevice = "wasm";
 
 function setStatus(text, kind = "idle") {
   els.statusBadge.textContent = text;
@@ -54,16 +45,6 @@ function showLoading(show) {
 function setChatEnabled(enabled) {
   els.messageInput.disabled = !enabled || generating;
   els.sendButton.disabled = !enabled || generating;
-
-  if (els.voiceInputButton) {
-    els.voiceInputButton.disabled =
-      !enabled || generating || !recognitionSupported;
-  }
-
-  if (els.voiceOutputButton) {
-    els.voiceOutputButton.disabled =
-      !enabled || !speechSupported;
-  }
 }
 
 function scrollToBottom() {
@@ -85,7 +66,7 @@ function addMessage(role, content = "") {
 
   const label = document.createElement("div");
   label.className = "message-label";
-  label.textContent = role === "user" ? "You" : "SmolLM2";
+  label.textContent = role === "user" ? "You" : "K.E.V.I.N";
 
   const body = document.createElement("div");
   body.className = "message-body";
@@ -105,163 +86,6 @@ function setGeneratingUI(active) {
   els.sendButton.classList.toggle("hidden", active);
   els.sendButton.disabled = active || !modelReady;
   els.messageInput.disabled = active || !modelReady;
-}
-
-
-function setVoiceStatus(text) {
-  if (els.voiceStatus) {
-    els.voiceStatus.textContent = text || "";
-  }
-}
-
-function speakText(text) {
-  if (!voiceOutputEnabled || !speechSupported || !text?.trim()) {
-    return;
-  }
-
-  try {
-    window.speechSynthesis.cancel();
-
-    const utterance =
-      new SpeechSynthesisUtterance(text.trim());
-
-    utterance.rate = 0.96;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
-
-    utterance.onstart = () => {
-      setVoiceStatus("K.E.V.I.N is speaking…");
-    };
-
-    utterance.onend = () => {
-      setVoiceStatus("");
-    };
-
-    utterance.onerror = () => {
-      setVoiceStatus("Voice output could not be played.");
-    };
-
-    window.speechSynthesis.speak(utterance);
-  } catch {
-    setVoiceStatus("Voice output is unavailable in this browser.");
-  }
-}
-
-function setupVoiceInput() {
-  if (!recognitionSupported) {
-    els.voiceInputButton.textContent = "🎙️ Voice unavailable";
-    els.voiceInputButton.disabled = true;
-    return;
-  }
-
-  const Recognition =
-    window.SpeechRecognition ||
-    window.webkitSpeechRecognition;
-
-  recognition = new Recognition();
-
-  recognition.continuous = false;
-  recognition.interimResults = true;
-  recognition.lang = navigator.language || "en-US";
-  recognition.maxAlternatives = 1;
-
-  recognition.onstart = () => {
-    isListening = true;
-    els.voiceInputButton.classList.add("active");
-    els.voiceInputButton.textContent = "⏹ Stop voice";
-    setVoiceStatus("Listening… speak to K.E.V.I.N.");
-  };
-
-  recognition.onresult = (event) => {
-    let transcript = "";
-
-    for (
-      let i = event.resultIndex;
-      i < event.results.length;
-      i++
-    ) {
-      transcript +=
-        event.results[i][0].transcript;
-    }
-
-    els.messageInput.value =
-      transcript.trim();
-
-    autoResize();
-  };
-
-  recognition.onerror = (event) => {
-    isListening = false;
-    els.voiceInputButton.classList.remove("active");
-    els.voiceInputButton.textContent = "🎙️ Voice";
-
-    const message =
-      event.error === "not-allowed"
-        ? "Microphone permission was denied."
-        : `Voice input error: ${event.error}`;
-
-    setVoiceStatus(message);
-  };
-
-  recognition.onend = () => {
-    isListening = false;
-    els.voiceInputButton.classList.remove("active");
-    els.voiceInputButton.textContent = "🎙️ Voice";
-
-    if (
-      els.messageInput.value.trim() &&
-      modelReady &&
-      !generating
-    ) {
-      setVoiceStatus("Voice captured. Press Send or Enter.");
-    }
-  };
-}
-
-function toggleVoiceInput() {
-  if (!recognition) {
-    return;
-  }
-
-  if (isListening) {
-    recognition.stop();
-    return;
-  }
-
-  if (generating) {
-    return;
-  }
-
-  try {
-    recognition.lang =
-      navigator.language || "en-US";
-
-    recognition.start();
-  } catch {
-    setVoiceStatus(
-      "Could not start voice input. Try again."
-    );
-  }
-}
-
-function toggleVoiceOutput() {
-  voiceOutputEnabled =
-    !voiceOutputEnabled;
-
-  els.voiceOutputButton.setAttribute(
-    "aria-pressed",
-    String(voiceOutputEnabled)
-  );
-
-  els.voiceOutputButton.textContent =
-    voiceOutputEnabled
-      ? "🔊 Voice On"
-      : "🔇 Voice Off";
-
-  if (!voiceOutputEnabled && speechSupported) {
-    window.speechSynthesis.cancel();
-    setVoiceStatus("");
-  }
 }
 
 function makeWorker() {
@@ -292,34 +116,42 @@ function makeWorker() {
         break;
 
       case "token":
-        if (window.currentAssistantBody) {
+        if (currentAssistantBody) {
           currentAssistantText += data.text;
-          window.currentAssistantBody.textContent += data.text;
+          currentAssistantBody.textContent += data.text;
           scrollToBottom();
         }
         break;
 
-      case "done":
-        if (window.currentAssistantBody) {
-          window.currentAssistantBody.querySelector?.(".cursor")?.remove();
-          const finalText = (data.text || currentAssistantText || window.currentAssistantBody.textContent || "").trim();
-          if (finalText) messages.push({ role: "assistant", content: finalText });
+      case "done": {
+        const finalText = (
+          data.text ||
+          currentAssistantText ||
+          currentAssistantBody?.textContent ||
+          ""
+        ).trim();
+
+        if (currentAssistantBody) {
+          currentAssistantBody.querySelector(".cursor")?.remove();
+          if (finalText) {
+            currentAssistantBody.textContent = finalText;
+            messages.push({ role: "assistant", content: finalText });
+          }
         }
+
         currentAssistantText = "";
-        window.currentAssistantBody = null;
-
-        if (finalText) {
-          speakText(finalText);
-        }
-
+        currentAssistantBody = null;
         setGeneratingUI(false);
         setStatus("Ready", "ready");
         break;
+      }
 
       case "error":
         showLoading(false);
         modelReady = false;
         setGeneratingUI(false);
+        els.loadButton.disabled = false;
+        els.loadButton.textContent = "Load Model";
         setStatus("Error", "error");
         addError(data.message);
         break;
@@ -327,9 +159,10 @@ function makeWorker() {
   };
 
   worker.onerror = (event) => {
-    setGeneratingUI(false);
-    setStatus("Worker error", "error");
-    addError(event.message || "The browser worker failed.");
+    if (!generating) {
+      setStatus("Worker error", "error");
+      addError(event.message || "The browser worker failed.");
+    }
   };
 
   return worker;
@@ -337,14 +170,21 @@ function makeWorker() {
 
 function addError(message) {
   removeEmptyState();
+
   const el = document.createElement("div");
   el.className = "message assistant";
+
   const bubble = document.createElement("div");
   bubble.className = "message-bubble";
-  bubble.innerHTML = `<div class="message-label">Error</div>`;
+
+  const label = document.createElement("div");
+  label.className = "message-label";
+  label.textContent = "Error";
+
   const body = document.createElement("div");
   body.textContent = message;
-  bubble.appendChild(body);
+
+  bubble.append(label, body);
   el.appendChild(bubble);
   els.chat.appendChild(el);
   scrollToBottom();
@@ -352,6 +192,7 @@ function addError(message) {
 
 async function hasWebGPU() {
   if (!("gpu" in navigator)) return false;
+
   try {
     const adapter = await navigator.gpu.requestAdapter();
     return !!adapter;
@@ -370,18 +211,17 @@ async function loadModel() {
   setProgress(0, "WebGPU will be used when the browser exposes a usable adapter.");
 
   const useWebGPU = await hasWebGPU();
-  const preferredDevice = useWebGPU ? "webgpu" : "wasm";
+  selectedDevice = useWebGPU ? "webgpu" : "wasm";
 
-  els.deviceBadge.textContent = `Backend: ${preferredDevice.toUpperCase()}`;
+  els.deviceBadge.textContent = `Backend: ${selectedDevice.toUpperCase()}`;
   els.loadingText.textContent = useWebGPU
     ? "WebGPU available — loading with GPU acceleration…"
     : "WebGPU unavailable — using WASM/CPU fallback…";
 
-  const w = makeWorker();
-  w.postMessage({
+  makeWorker().postMessage({
     type: "load",
     modelId: MODEL_ID,
-    device: preferredDevice,
+    device: selectedDevice,
   });
 }
 
@@ -397,8 +237,10 @@ function sendMessage() {
 
   const assistant = addMessage("assistant", "");
   assistant.body.innerHTML = '<span class="cursor" aria-hidden="true"></span>';
-  window.currentAssistantBody = assistant.body;
+
+  currentAssistantBody = assistant.body;
   currentAssistantText = "";
+
   setGeneratingUI(true);
 
   worker.postMessage({
@@ -410,16 +252,56 @@ function sendMessage() {
   });
 }
 
+/*
+ * A running Transformers.js inference call can keep the worker busy.
+ * Terminating the worker guarantees that Stop actually interrupts generation.
+ * The model assets remain browser-cached, so the replacement worker can load them again.
+ */
 function stopGeneration() {
-  if (!generating || !worker) return;
-  worker.postMessage({ type: "stop" });
+  if (!generating) return;
+
+  const partial = currentAssistantText.trim();
+
+  if (worker) {
+    try {
+      worker.terminate();
+    } catch (_) {}
+    worker = null;
+  }
+
+  generating = false;
+  modelReady = false;
+
+  if (currentAssistantBody) {
+    currentAssistantBody.querySelector(".cursor")?.remove();
+    if (partial) currentAssistantBody.textContent = partial;
+  }
+
+  setGeneratingUI(false);
+  setStatus("Stopped — restarting model…", "loading");
+
+  els.loadButton.disabled = true;
+  els.loadButton.textContent = "Restarting…";
+  showLoading(true);
+  els.loadingText.textContent = "Restarting K.E.V.I.N…";
+  setProgress(0, "Reusing browser-cached model files when available.");
+
+  setTimeout(() => {
+    makeWorker().postMessage({
+      type: "load",
+      modelId: MODEL_ID,
+      device: selectedDevice,
+    });
+  }, 50);
 }
 
 function clearChat() {
   if (generating) stopGeneration();
-  window.currentAssistantBody = null;
+
+  currentAssistantBody = null;
   currentAssistantText = "";
   messages = [];
+
   els.chat.innerHTML = `
     <div id="emptyState" class="empty-state">
       <div class="empty-icon">✦</div>
@@ -439,15 +321,13 @@ function autoResize() {
 els.loadButton.addEventListener("click", loadModel);
 els.clearButton.addEventListener("click", clearChat);
 els.stopButton.addEventListener("click", stopGeneration);
+
 els.composer.addEventListener("submit", (event) => {
   event.preventDefault();
   sendMessage();
 });
-els.messageInput.addEventListener("input", autoResize);
-els.voiceInputButton?.addEventListener("click", toggleVoiceInput);
-els.voiceOutputButton?.addEventListener("click", toggleVoiceOutput);
 
-setupVoiceInput();
+els.messageInput.addEventListener("input", autoResize);
 
 els.messageInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) {
@@ -455,13 +335,5 @@ els.messageInput.addEventListener("keydown", (event) => {
     sendMessage();
   }
 });
-
-if (!recognitionSupported && !speechSupported) {
-  setVoiceStatus("Voice is not supported by this browser.");
-} else if (!recognitionSupported) {
-  setVoiceStatus("Voice input is unavailable in this browser. Voice output is available.");
-} else if (!speechSupported) {
-  setVoiceStatus("Voice output is unavailable in this browser. Voice input is available.");
-}
 
 setStatus("Not loaded", "idle");
