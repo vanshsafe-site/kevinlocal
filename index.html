@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1020">
+  <meta name="description" content="K.E.V.I.N — Keeping Every Voice in Need. A private, local emotional-support AI running in your browser.">
+  <title>K.E.V.I.N — Keeping Every Voice in Need</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <h1>K.E.V.I.N</h1>
+        <p class="tagline">Keeping Every Voice in Need</p>
+        <p>Your private, local emotional-support AI.</p>
+      </div>
+      <div class="header-actions">
+        <span id="statusBadge" class="status-badge idle">Not loaded</span>
+        <button id="loadButton" class="button primary" type="button">Load Model</button>
+        <button id="clearButton" class="button ghost" type="button">Clear Chat</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="model-card" aria-live="polite">
+        <div class="model-row">
+          <div>
+            <strong>SmolLM2-360M-Instruct</strong>
+            <span class="muted">Hugging Face • browser-only inference</span>
+          </div>
+          <span id="deviceBadge" class="device-badge">Backend: —</span>
+        </div>
+
+        <div id="loadingPanel" class="loading-panel hidden">
+          <div class="loading-top">
+            <span id="loadingText">Checking browser support…</span>
+            <span id="progressText">0%</span>
+          </div>
+          <div class="progress-track" aria-label="Model loading progress">
+            <div id="progressBar" class="progress-bar" style="width:0%"></div>
+          </div>
+          <small id="loadingDetail">The model is downloaded from Hugging Face and cached by Transformers.js.</small>
+        </div>
+      </section>
+
+      <section id="chat" class="chat" aria-live="polite" aria-label="Chat messages">
+        <div id="emptyState" class="empty-state">
+          <div class="empty-icon">✦</div>
+          <h2>A quiet place to talk</h2>
+          <p>Click <b>Load Model</b>, then talk to K.E.V.I.N about what is on your mind. Your conversation is processed locally in your browser.</p>
+          <div class="privacy-note">K.E.V.I.N is designed to listen with patience, warmth, and without judgment.</div>
+        </div>
+      </section>
+
+      <section class="composer-wrap">
+        <form id="composer" class="composer">
+          <label class="sr-only" for="messageInput">Message</label>
+          <textarea id="messageInput" rows="1" placeholder="Tell K.E.V.I.N what is on your mind…" disabled></textarea>
+          <div class="composer-bottom">
+            <span class="hint">Enter to send • Shift+Enter for newline</span>
+            <div class="composer-actions">
+              <button id="stopButton" class="button danger hidden" type="button">Stop</button>
+              <button id="sendButton" class="button primary" type="submit" disabled>Send</button>
+            </div>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <footer>
+      <span>K.E.V.I.N • Keeping Every Voice in Need</span>
+      <span>WebGPU preferred • WASM/CPU fallback</span>
+    </footer>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

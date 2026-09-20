@@ -1,0 +1,10 @@
+{
+  "name": "kevin-local-emotional-support-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "K.E.V.I.N — Keeping Every Voice in Need. Static browser-only emotional-support chat using SmolLM2-360M-Instruct and Transformers.js.",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@huggingface/transformers": "4.0.1"
+  }
+}
