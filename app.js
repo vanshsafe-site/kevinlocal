@@ -23,8 +23,6 @@ let modelReady = false;
 let generating = false;
 let messages = [];
 let currentAssistantText = "";
-let currentAssistantBody = null;
-let selectedDevice = "wasm";
 
 function setStatus(text, kind = "idle") {
   els.statusBadge.textContent = text;
@@ -66,7 +64,7 @@ function addMessage(role, content = "") {
 
   const label = document.createElement("div");
   label.className = "message-label";
-  label.textContent = role === "user" ? "You" : "K.E.V.I.N";
+  label.textContent = role === "user" ? "You" : "SmolLM2";
 
   const body = document.createElement("div");
   body.className = "message-body";
@@ -116,42 +114,29 @@ function makeWorker() {
         break;
 
       case "token":
-        if (currentAssistantBody) {
+        if (window.currentAssistantBody) {
           currentAssistantText += data.text;
-          currentAssistantBody.textContent += data.text;
+          window.currentAssistantBody.textContent += data.text;
           scrollToBottom();
         }
         break;
 
-      case "done": {
-        const finalText = (
-          data.text ||
-          currentAssistantText ||
-          currentAssistantBody?.textContent ||
-          ""
-        ).trim();
-
-        if (currentAssistantBody) {
-          currentAssistantBody.querySelector(".cursor")?.remove();
-          if (finalText) {
-            currentAssistantBody.textContent = finalText;
-            messages.push({ role: "assistant", content: finalText });
-          }
+      case "done":
+        if (window.currentAssistantBody) {
+          window.currentAssistantBody.querySelector?.(".cursor")?.remove();
+          const finalText = (data.text || currentAssistantText || window.currentAssistantBody.textContent || "").trim();
+          if (finalText) messages.push({ role: "assistant", content: finalText });
         }
-
         currentAssistantText = "";
-        currentAssistantBody = null;
+        window.currentAssistantBody = null;
         setGeneratingUI(false);
         setStatus("Ready", "ready");
         break;
-      }
 
       case "error":
         showLoading(false);
         modelReady = false;
         setGeneratingUI(false);
-        els.loadButton.disabled = false;
-        els.loadButton.textContent = "Load Model";
         setStatus("Error", "error");
         addError(data.message);
         break;
@@ -159,10 +144,9 @@ function makeWorker() {
   };
 
   worker.onerror = (event) => {
-    if (!generating) {
-      setStatus("Worker error", "error");
-      addError(event.message || "The browser worker failed.");
-    }
+    setGeneratingUI(false);
+    setStatus("Worker error", "error");
+    addError(event.message || "The browser worker failed.");
   };
 
   return worker;
@@ -170,21 +154,14 @@ function makeWorker() {
 
 function addError(message) {
   removeEmptyState();
-
   const el = document.createElement("div");
   el.className = "message assistant";
-
   const bubble = document.createElement("div");
   bubble.className = "message-bubble";
-
-  const label = document.createElement("div");
-  label.className = "message-label";
-  label.textContent = "Error";
-
+  bubble.innerHTML = `<div class="message-label">Error</div>`;
   const body = document.createElement("div");
   body.textContent = message;
-
-  bubble.append(label, body);
+  bubble.appendChild(body);
   el.appendChild(bubble);
   els.chat.appendChild(el);
   scrollToBottom();
@@ -192,7 +169,6 @@ function addError(message) {
 
 async function hasWebGPU() {
   if (!("gpu" in navigator)) return false;
-
   try {
     const adapter = await navigator.gpu.requestAdapter();
     return !!adapter;
@@ -211,17 +187,18 @@ async function loadModel() {
   setProgress(0, "WebGPU will be used when the browser exposes a usable adapter.");
 
   const useWebGPU = await hasWebGPU();
-  selectedDevice = useWebGPU ? "webgpu" : "wasm";
+  const preferredDevice = useWebGPU ? "webgpu" : "wasm";
 
-  els.deviceBadge.textContent = `Backend: ${selectedDevice.toUpperCase()}`;
+  els.deviceBadge.textContent = `Backend: ${preferredDevice.toUpperCase()}`;
   els.loadingText.textContent = useWebGPU
     ? "WebGPU available — loading with GPU acceleration…"
     : "WebGPU unavailable — using WASM/CPU fallback…";
 
-  makeWorker().postMessage({
+  const w = makeWorker();
+  w.postMessage({
     type: "load",
     modelId: MODEL_ID,
-    device: selectedDevice,
+    device: preferredDevice,
   });
 }
 
@@ -237,10 +214,8 @@ function sendMessage() {
 
   const assistant = addMessage("assistant", "");
   assistant.body.innerHTML = '<span class="cursor" aria-hidden="true"></span>';
-
-  currentAssistantBody = assistant.body;
+  window.currentAssistantBody = assistant.body;
   currentAssistantText = "";
-
   setGeneratingUI(true);
 
   worker.postMessage({
@@ -252,56 +227,16 @@ function sendMessage() {
   });
 }
 
-/*
- * A running Transformers.js inference call can keep the worker busy.
- * Terminating the worker guarantees that Stop actually interrupts generation.
- * The model assets remain browser-cached, so the replacement worker can load them again.
- */
 function stopGeneration() {
-  if (!generating) return;
-
-  const partial = currentAssistantText.trim();
-
-  if (worker) {
-    try {
-      worker.terminate();
-    } catch (_) {}
-    worker = null;
-  }
-
-  generating = false;
-  modelReady = false;
-
-  if (currentAssistantBody) {
-    currentAssistantBody.querySelector(".cursor")?.remove();
-    if (partial) currentAssistantBody.textContent = partial;
-  }
-
-  setGeneratingUI(false);
-  setStatus("Stopped — restarting model…", "loading");
-
-  els.loadButton.disabled = true;
-  els.loadButton.textContent = "Restarting…";
-  showLoading(true);
-  els.loadingText.textContent = "Restarting K.E.V.I.N…";
-  setProgress(0, "Reusing browser-cached model files when available.");
-
-  setTimeout(() => {
-    makeWorker().postMessage({
-      type: "load",
-      modelId: MODEL_ID,
-      device: selectedDevice,
-    });
-  }, 50);
+  if (!generating || !worker) return;
+  worker.postMessage({ type: "stop" });
 }
 
 function clearChat() {
   if (generating) stopGeneration();
-
-  currentAssistantBody = null;
+  window.currentAssistantBody = null;
   currentAssistantText = "";
   messages = [];
-
   els.chat.innerHTML = `
     <div id="emptyState" class="empty-state">
       <div class="empty-icon">✦</div>
@@ -321,14 +256,11 @@ function autoResize() {
 els.loadButton.addEventListener("click", loadModel);
 els.clearButton.addEventListener("click", clearChat);
 els.stopButton.addEventListener("click", stopGeneration);
-
 els.composer.addEventListener("submit", (event) => {
   event.preventDefault();
   sendMessage();
 });
-
 els.messageInput.addEventListener("input", autoResize);
-
 els.messageInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
