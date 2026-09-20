@@ -89,7 +89,7 @@ textarea {
   background: transparent; color: var(--text); padding: 8px; line-height: 1.5;
 }
 textarea::placeholder { color: #66718a; }
-.composer-bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 5px 7px 2px; }
+.composer-bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 5px 7px 2px; flex-wrap: wrap; }
 .hint { color: #66718a; font-size: 11px; }
 .composer-actions { display: flex; gap: 7px; }
 

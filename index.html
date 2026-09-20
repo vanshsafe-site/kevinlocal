@@ -59,7 +59,29 @@
           <label class="sr-only" for="messageInput">Message</label>
           <textarea id="messageInput" rows="1" placeholder="Tell K.E.V.I.N what is on your mind…" disabled></textarea>
           <div class="composer-bottom">
+            <div class="voice-actions">
+              <button
+                id="voiceInputButton"
+                class="button voice-button"
+                type="button"
+                title="Voice input"
+                aria-label="Voice input"
+                disabled
+              >🎙️ Voice</button>
+
+              <button
+                id="voiceOutputButton"
+                class="button voice-button"
+                type="button"
+                title="Toggle voice output"
+                aria-label="Toggle voice output"
+                aria-pressed="true"
+                disabled
+              >🔊 Voice On</button>
+            </div>
+
             <span class="hint">Enter to send • Shift+Enter for newline</span>
+
             <div class="composer-actions">
               <button id="stopButton" class="button danger hidden" type="button">Stop</button>
               <button id="sendButton" class="button primary" type="submit" disabled>Send</button>

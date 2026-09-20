@@ -54,6 +54,16 @@ function showLoading(show) {
 function setChatEnabled(enabled) {
   els.messageInput.disabled = !enabled || generating;
   els.sendButton.disabled = !enabled || generating;
+
+  if (els.voiceInputButton) {
+    els.voiceInputButton.disabled =
+      !enabled || generating || !recognitionSupported;
+  }
+
+  if (els.voiceOutputButton) {
+    els.voiceOutputButton.disabled =
+      !enabled || !speechSupported;
+  }
 }
 
 function scrollToBottom() {
@@ -297,6 +307,11 @@ function makeWorker() {
         }
         currentAssistantText = "";
         window.currentAssistantBody = null;
+
+        if (finalText) {
+          speakText(finalText);
+        }
+
         setGeneratingUI(false);
         setStatus("Ready", "ready");
         break;
@@ -429,11 +444,24 @@ els.composer.addEventListener("submit", (event) => {
   sendMessage();
 });
 els.messageInput.addEventListener("input", autoResize);
+els.voiceInputButton?.addEventListener("click", toggleVoiceInput);
+els.voiceOutputButton?.addEventListener("click", toggleVoiceOutput);
+
+setupVoiceInput();
+
 els.messageInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
     sendMessage();
   }
 });
+
+if (!recognitionSupported && !speechSupported) {
+  setVoiceStatus("Voice is not supported by this browser.");
+} else if (!recognitionSupported) {
+  setVoiceStatus("Voice input is unavailable in this browser. Voice output is available.");
+} else if (!speechSupported) {
+  setVoiceStatus("Voice output is unavailable in this browser. Voice input is available.");
+}
 
 setStatus("Not loaded", "idle");
